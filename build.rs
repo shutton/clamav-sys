@@ -15,8 +15,8 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 // MA 02110-1301, USA.
 
-use std::path::PathBuf;
 use std::env;
+use std::path::PathBuf;
 
 // Generate bindings for these functions:
 const BINDGEN_FUNCTIONS: &[&str] = &[
@@ -30,7 +30,6 @@ const BINDGEN_FUNCTIONS: &[&str] = &[
     "cli_versig2",
     "cli_getdsig",
     "cli_get_debug_flag",
-
     "cl_init",
     "cl_debug",
     "cl_engine_new",
@@ -86,31 +85,33 @@ const BINDGEN_TYPES: &[&str] = &["cli_matcher", "cli_ac_data", "cli_ac_result"];
 const BINDGEN_CONSTANTS: &[&str] = &[
     "CL_SCAN_.*",
     "CL_INIT_DEFAULT",
-	"CL_DB_.*",
+    "CL_DB_.*",
     "ENGINE_OPTIONS_.*",
 ];
 
 fn generate_bindings(customize_bindings: &dyn Fn(bindgen::Builder) -> bindgen::Builder) {
     let mut bindings = bindgen::Builder::default();
-	for function in BINDGEN_FUNCTIONS {
-		bindings = bindings.whitelist_function(function);
-	}
+    for function in BINDGEN_FUNCTIONS {
+        bindings = bindings.whitelist_function(function);
+    }
 
-	for typename in BINDGEN_TYPES {
-		bindings = bindings.whitelist_type(typename);
-	
-	}
+    for typename in BINDGEN_TYPES {
+        bindings = bindings.whitelist_type(typename);
+    }
 
-	for constant in BINDGEN_CONSTANTS {
-		bindings = bindings.whitelist_var(constant);
-	}
+    for constant in BINDGEN_CONSTANTS {
+        bindings = bindings.whitelist_var(constant);
+    }
 
-
-    bindings = bindings.header("wrapper.h")
-
+    bindings = bindings
+        .header("wrapper.h")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks));
+
+    // Prevent some constants from inappropriately receiving prefix of their type.
+    //  Without this, e.g., CL_CLEAN becomes cl_error_t_CL_CLEAN
+    bindings = bindings.prepend_enum_name(false);
 
     bindings = customize_bindings(bindings);
 
@@ -133,14 +134,15 @@ fn cargo_common() {
     println!("cargo:rerun-if-changed=wrapper.h");
 }
 
-
-
 #[cfg(windows)]
 fn main() {
     let include_paths = match vcpkg::find_package("clamav") {
         Ok(pkg) => pkg.include_paths,
         Err(err) => {
-            println!("cargo:warning=Either vcpkg is not installed, or an error occurred in vcpkg: {}", err);
+            println!(
+                "cargo:warning=Either vcpkg is not installed, or an error occurred in vcpkg: {}",
+                err
+            );
             let clamav_source = PathBuf::from(env::var("CLAMAV_SOURCE").expect("CLAMAV_SOURCE environment variable must be set and point to ClamAV's source directory"));
             let clamav_build = PathBuf::from(env::var("CLAMAV_BUILD").expect("CLAMAV_BUILD environment variable must be set and point to ClamAV's build directory"));
             let openssl_include = PathBuf::from(env::var("OPENSSL_INCLUDE").expect("OPENSSL_INCLUDE environment variable must be set and point to openssl's include directory"));
@@ -152,14 +154,27 @@ fn main() {
                 _ => panic!("Unexpected build profile"),
             };
 
-            println!("cargo:rustc-link-search=native={}", library_path.to_str().unwrap());
+            println!(
+                "cargo:rustc-link-search=native={}",
+                library_path.to_str().unwrap()
+            );
 
-            vec![clamav_source.join("libclamav"), clamav_build, openssl_include]
+            vec![
+                clamav_source.join("libclamav"),
+                clamav_build,
+                openssl_include,
+            ]
         }
     };
 
     cargo_common();
-    generate_bindings(&|x: bindgen::Builder| -> bindgen::Builder {let mut x = x; for include_path in &include_paths {x = x.clang_arg("-I").clang_arg(include_path.to_str().unwrap());}; x});
+    generate_bindings(&|x: bindgen::Builder| -> bindgen::Builder {
+        let mut x = x;
+        for include_path in &include_paths {
+            x = x.clang_arg("-I").clang_arg(include_path.to_str().unwrap());
+        }
+        x
+    });
 }
 
 #[cfg(unix)]
@@ -178,6 +193,11 @@ fn main() {
     }
 
     cargo_common();
-    generate_bindings(&|x: bindgen::Builder| -> bindgen::Builder {let mut x = x; for include_path in &include_paths {x = x.clang_arg("-I").clang_arg(include_path.to_str().unwrap());}; x});
+    generate_bindings(&|x: bindgen::Builder| -> bindgen::Builder {
+        let mut x = x;
+        for include_path in &include_paths {
+            x = x.clang_arg("-I").clang_arg(include_path.to_str().unwrap());
+        }
+        x
+    });
 }
-
